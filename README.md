@@ -1,37 +1,36 @@
-# Reparador Wi-Fi 5 GHz para Realtek RTL8822CE en Windows
+# Reparador y Persistencia Wi-Fi 5 GHz para Realtek RTL8822CE en Windows
 
-Script en Python diseñado para solucionar de forma permanente el problema en Windows donde la tarjeta de red interna **Realtek RTL8822CE** no detecta redes Wi-Fi de **5 GHz** (especialmente zonas con cobertura móvil o puntos de acceso en canales altos como el 149), o negocia a velocidades muy bajas (modo legacy 802.11a a 54 Mbps).
+Script en Python diseñado para solucionar de forma permanente el problema en Windows donde la tarjeta de red interna **Realtek RTL8822CE** no detecta o falla al conectarse a redes Wi-Fi de **5 GHz** (especialmente puntos de acceso en canales altos como el 149), asegurando que la conexión funcione de inmediato y sobreviva a todos los reinicios del sistema sin intervención manual.
 
 ---
 
 ## ⚙️ ¿Qué hace este script?
 
-1. **Solicitud automática de permisos de Administrador:** Se eleva mediante el control de cuentas de usuario (UAC) de Windows al hacer doble clic, sin requerir abrir consolas manualmente.
-2. **Purga de controladores conflictivos:** Utiliza `pnputil` para detectar y desinstalar del Driver Store paquetes defectuosos (como la versión 2024.0.8.141) que Windows Update instala y que rompen la negociación a 5 GHz.
-3. **Blindaje contra Windows Update:** Habilita la directiva `ExcludeWUDriversInQualityUpdate` en el Registro para evitar que Microsoft Update vuelva a sobrescribir el controlador funcional con versiones genéricas inestables.
-4. **Persistencia tras reinicios (Arranque limpio):** Desactiva el Inicio Rápido de Windows (`HiberbootEnabled = 0` y `powercfg /h off`), evitando que el bus PCIe cargue estados congelados en memoria que bloquean las frecuencias altas al reiniciar o apagar el equipo.
-5. **Desbloqueo total de la banda de 5 GHz:**
-   - Activa el estándar de regulación internacional (`bSupport80211d = 1`).
-   - Configura el dominio `CountryRegion5G = 7` para desbloquear los canales altos (149 al 165).
-   - Apaga la suspensión selectiva por ahorro de energía en el bus PCIe (`PnPCapabilities = 24`).
-6. **Reconexión automática sin pérdida de credenciales:**
-   - Reinicia la interfaz a nivel de hardware mediante `Restart-NetAdapter`.
-   - Mantiene los perfiles existentes con `connectionmode=auto`, asegurando que la conexión se restablezca de inmediato conservando la contraseña guardada.
+1. **Solicitud automática de privilegios de Administrador:** Detecta el nivel de ejecución y se eleva automáticamente mediante el control de cuentas de usuario (UAC) de Windows al ejecutarlo con doble clic.
+2. **Desbloqueo de frecuencias en el Registro:**
+   - Localiza la clave de configuración de la tarjeta Realtek dentro de `SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}`.
+   - Activa el estándar de dominio regulatorio internacional (`bSupport80211d = 1`).
+   - Configura la región de radiofrecuencia (`CountryRegion5G = 7`) para habilitar el rango completo de canales altos (149 al 165).
+3. **Persistencia mediante Tarea Programada nativa:**
+   - Genera el archivo de soporte `C:\ProgramData\FixWifi\fix.ps1`.
+   - Registra una tarea programada en Windows (`FixRealtek5G`) que se ejecuta de forma silenciosa al iniciar sesión (`/sc onlogon`) con privilegios máximos del sistema (`SYSTEM`), eliminando la necesidad de volver a ejecutar scripts o comandos tras reiniciar el equipo.
+4. **Reinicio de la tarjeta por hardware:**
+   - Ejecuta `Restart-NetAdapter` para recargar el firmware del chip PCIe en caliente, destrabando la conexión al instante y asociándose automáticamente a tu red Wi-Fi sin alterar contraseñas ni perfiles guardados.
 
 ---
 
 ## 📋 Requisitos
 
 - **Sistema Operativo:** Windows 10 / Windows 11.
-- **Hardware:** Tarjeta de red interna Realtek RTL8822CE 802.11ac PCIe.
-- **Python:** Python 3 instalado en Windows (utiliza únicamente módulos nativos: `winreg`, `subprocess`, `ctypes`, `re`, `sys`, `time`).
+- **Hardware:** Tarjeta de red Realtek RTL8822CE 802.11ac PCIe.
+- **Python:** Python 3 instalado en Windows (utiliza únicamente librerías estándar nativas: `winreg`, `subprocess`, `ctypes`, `os`, `sys`, `time`).
 
 ---
 
-## 🚀 Uso rápido (incluso en equipos recién formateados)
+## 🚀 Uso rápido
 
-1. Descarga el archivo `wifi-reparar.py` (o clona el repositorio).
-2. Haz doble clic sobre `wifi-reparar.py`.
-3. Acepta la ventana de confirmación de permisos de Administrador (UAC).
-4. El script limpiará versiones rotas, aplicará la configuración en el Registro y recargará la tarjeta.
-5. El sistema detectará las redes 5 GHz de inmediato y se conectará automáticamente a tu red sin tener que reescribir tu contraseña en cada reinicio.
+1. Descarga el archivo `wifi-reparar.py`.
+2. Haz clic derecho y selecciona **Ejecutar con Python** (o doble clic).
+3. Acepta la ventana de permisos de Administrador (UAC).
+4. El script configurará los parámetros en el Registro, registrará la tarea de inicio automático en Windows y reiniciará el adaptador de red.
+5. La red de 5 GHz conectará de inmediato y la solución quedará fija para todos los arranques futuros.
