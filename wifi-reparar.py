@@ -54,10 +54,23 @@ def block_driver_updates():
             )
 
         print(
-            "[+] Blindaje aplicado: Bloqueo de instalación por Hardware ID (RTL8822CE)."
+            "[+] Blindaje aplicado: Bloqueo de instalacion por Hardware ID (RTL8822CE)."
         )
     except Exception as e:
-        print(f"[-] Error aplicando restricción de DeviceInstall: {e}")
+        print(f"[-] Error aplicando restriccion de DeviceInstall: {e}")
+
+
+def disable_fast_startup():
+    # Desactiva el Inicio Rapido (Fast Startup) para que el bus PCIe y el driver arranquen limpios
+    power_path = r"SYSTEM\CurrentControlSet\Control\Session Manager\Power"
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE, power_path, 0, winreg.KEY_SET_VALUE
+        ) as key:
+            winreg.SetValueEx(key, "HiberbootEnabled", 0, winreg.REG_DWORD, 0)
+        print("[+] Inicio rapido de Windows desactivado (persistencia en reinicios asegurada).")
+    except Exception as e:
+        print(f"[-] Error configurando HiberbootEnabled: {e}")
 
 
 def configure_realtek_5ghz():
@@ -82,14 +95,14 @@ def configure_realtek_5ghz():
                         if "8822CE" in driver_desc.upper():
                             print(f"[+] Tarjeta detectada: {driver_desc}")
 
-                            # Limpiar valores manuales que limitan velocidad
+                            # Limpiar valores manuales que limitan velocidad o ancho de banda
                             for param in ["WirelessMode", "BW_20_40_80M"]:
                                 try:
                                     winreg.DeleteValue(key, param)
                                 except FileNotFoundError:
                                     pass
 
-                            # Desbloquear canales altos (canal 149), 802.11d y apagar ahorro de energía
+                            # Desbloquear canales altos (canal 149), 802.11d y apagar ahorro de energia
                             winreg.SetValueEx(
                                 key, "bSupport80211d", 0, winreg.REG_SZ, "1"
                             )
@@ -109,7 +122,7 @@ def configure_realtek_5ghz():
 
                             found = True
                             print(
-                                "[+] Parámetros de 5 GHz configurados en el Registro."
+                                "[+] Parametros de 5 GHz configurados en el Registro."
                             )
                             break
                 except (FileNotFoundError, OSError):
@@ -134,11 +147,22 @@ def restart_adapter_hardware():
     print("[+] Controlador recargado.")
 
 
-def clear_wifi_profile(profile_name="Remi 5G"):
-    subprocess.run(
-        ["netsh", "wlan", "delete", "profile", f"name={profile_name}"],
+def ensure_auto_connect(profile_name="Remi 5G"):
+    # Configura el perfil para autoconectar sin pedir ni borrar la contrasena guardada
+    res = subprocess.run(
+        [
+            "netsh",
+            "wlan",
+            "set",
+            "profileparameter",
+            f"name={profile_name}",
+            "connectionmode=auto",
+            "nonBroadcast=no",
+        ],
         capture_output=True,
     )
+    if res.returncode == 0:
+        print(f"[+] Perfil '{profile_name}' configurado para autoconexion inmediata.")
 
 
 def main():
@@ -151,16 +175,15 @@ def main():
     print("=" * 60)
 
     block_driver_updates()
+    disable_fast_startup()
 
     if configure_realtek_5ghz():
         restart_adapter_hardware()
-        clear_wifi_profile("Remi 5G")
-        print("\n[✓] Configuración y blindaje completados exitosamente.")
-        print(
-            "[*] Puedes instalar las actualizaciones de Windows sin riesgo a sobreescritura."
-        )
+        ensure_auto_connect("Remi 5G")
+        print("\n[✓] Configuracion completada con exito.")
+        print("[*] Tu contrasena se mantendra guardada y conectara en automatico tras reiniciar.")
     else:
-        print("\n[X] No se encontró el adaptador Realtek RTL8822CE.")
+        print("\n[X] No se encontro el adaptador Realtek RTL8822CE.")
 
     input("\nPresiona Enter para cerrar...")
 
