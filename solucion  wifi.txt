@@ -1,0 +1,64 @@
+
+bloque a pegar en power Shell como administrador 
+
+
+
+
+# 1. Tu bloque original exacto
+$path = HKLMSYSTEMCurrentControlSetControlClass{4d36e972-e325-11ce-bfc1-08002be10318}
+$target = Get-ChildItem -Path $path -ErrorAction SilentlyContinue  Where-Object { (Get-ItemProperty $_.PsPath).DriverDesc -match 8822CE }  Select-Object -First 1
+
+# Activar soporte de canales extendidos y 802.11d
+Set-ItemProperty -Path $target.PsPath -Name bSupport80211d -Value 1 -Type String
+Set-ItemProperty -Path $target.PsPath -Name CountryRegion5G -Value 7 -Type String
+
+# Reiniciar la tarjeta interna
+Get-NetAdapter  Where-Object { $_.InterfaceDescription -match 8822CE }  Restart-NetAdapter
+
+
+
+
+blindado contra reinicio y apagado   power Shell como administrador 
+
+
+# 1. Habilitar ejecución de scripts en el sistema
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope LocalMachine -Force
+
+# 2. Desactivar inicio rápido (Fast Startup) para asegurar un apagado completo
+powercfg /h off
+Write-Host "[+] Inicio rapido desactivado." -ForegroundColor Green
+
+# 3. Crear directorio y guardar el script base corregido
+$fixDir = "C:\ProgramData\FixWifi"
+if (-not (Test-Path $fixDir)) { New-Item -ItemType Directory -Path $fixDir -Force | Out-Null }
+
+$psCode = @'
+Start-Sleep -Seconds 5
+$path = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}"
+$target = Get-ChildItem -Path $path -ErrorAction SilentlyContinue | Where-Object { (Get-ItemProperty $_.PsPath).DriverDesc -match "8822CE" } | Select-Object -First 1
+
+if ($target) {
+    Set-ItemProperty -Path $target.PsPath -Name "bSupport80211d" -Value "1" -Type String
+    Set-ItemProperty -Path $target.PsPath -Name "CountryRegion5G" -Value "7" -Type String
+}
+
+Get-NetAdapter | Where-Object { $_.InterfaceDescription -match "8822CE" } | Restart-NetAdapter
+'@
+
+Set-Content -Path "$fixDir\fix.ps1" -Value $psCode -Encoding UTF8
+Write-Host "[+] Script guardado en $fixDir\fix.ps1" -ForegroundColor Green
+
+# 4. Limpiar tareas anteriores y crear las tareas de persistencia dual
+schtasks /delete /tn "FixRealtek5G_Boot" /f 2>$null
+schtasks /delete /tn "FixRealtek5G_Logon" /f 2>$null
+schtasks /delete /tn "FixRealtek5G" /f 2>$null
+
+schtasks /create /tn "FixRealtek5G_Boot" /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\ProgramData\FixWifi\fix.ps1" /sc onstart /delay 0000:10 /ru SYSTEM /rl highest /f
+schtasks /create /tn "FixRealtek5G_Logon" /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\ProgramData\FixWifi\fix.ps1" /sc onlogon /delay 0000:05 /rl highest /f
+
+Write-Host "[+] Tareas programadas de arranque y sesion creadas exitosamente." -ForegroundColor Green
+
+# 5. Ejecutar la solución en vivo ahora mismo
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$fixDir\fix.ps1"
+
+Write-Host "[+] Proceso completado: adaptador configurado y blindaje permanente activo." -ForegroundColor Green
