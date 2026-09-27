@@ -1,36 +1,42 @@
 # Reparador y Persistencia Wi-Fi 5 GHz para Realtek RTL8822CE en Windows
 
-Script en Python diseñado para solucionar de forma permanente el problema en Windows donde la tarjeta de red interna **Realtek RTL8822CE** no detecta o falla al conectarse a redes Wi-Fi de **5 GHz** (especialmente puntos de acceso en canales altos como el 149), asegurando que la conexión funcione de inmediato y sobreviva a todos los reinicios del sistema sin intervención manual.
+Script en Python diseñado para solucionar de forma definitiva el problema en Windows donde la tarjeta de red interna **Realtek RTL8822CE** no detecta o falla al conectarse a redes Wi-Fi de **5 GHz** (especialmente puntos de acceso en canales altos como el 149), garantizando conexión inmediata y persistencia total tanto en **reinicios** como en **apagados y encendidos completos** sin intervención manual.
 
 ---
 
 ## ⚙️ ¿Qué hace este script?
 
-1. **Solicitud automática de privilegios de Administrador:** Detecta el nivel de ejecución y se eleva automáticamente mediante el control de cuentas de usuario (UAC) de Windows al ejecutarlo con doble clic.
-2. **Desbloqueo de frecuencias en el Registro:**
-   - Localiza la clave de configuración de la tarjeta Realtek dentro de `SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}`.
-   - Activa el estándar de dominio regulatorio internacional (`bSupport80211d = 1`).
-   - Configura la región de radiofrecuencia (`CountryRegion5G = 7`) para habilitar el rango completo de canales altos (149 al 165).
-3. **Persistencia mediante Tarea Programada nativa:**
-   - Genera el archivo de soporte `C:\ProgramData\FixWifi\fix.ps1`.
-   - Registra una tarea programada en Windows (`FixRealtek5G`) que se ejecuta de forma silenciosa al iniciar sesión (`/sc onlogon`) con privilegios máximos del sistema (`SYSTEM`), eliminando la necesidad de volver a ejecutar scripts o comandos tras reiniciar el equipo.
-4. **Reinicio de la tarjeta por hardware:**
-   - Ejecuta `Restart-NetAdapter` para recargar el firmware del chip PCIe en caliente, destrabando la conexión al instante y asociándose automáticamente a tu red Wi-Fi sin alterar contraseñas ni perfiles guardados.
+1. **Elevación automática de privilegios:** Detecta el nivel de permisos y solicita automáticamente elevación de Administrador mediante el Control de Cuentas de Usuario (UAC) de Windows al ejecutarse.
+2. **Desactivación del Inicio Rápido (`powercfg /h off`):**
+   - Deshabilita la hibernación del núcleo de Windows (Fast Startup), evitando que el bus PCIe despierte en estados de energía erráticos o revierta la configuración tras apagar el equipo.
+3. **Persistencia mediante Tarea Programada de Sistema:**
+   - Genera el script de persistencia en `C:\ProgramData\FixWifi\fix_wifi.ps1`.
+   - Limpia cualquier tarea previa conflictiva y registra una nueva tarea nativa (`FixRealtek5G`) configurada para ejecutarse en el arranque del sistema (`/sc onstart`) bajo la cuenta con mayores privilegios (`/ru SYSTEM /rl highest`), operando en segundo plano antes de que el usuario inicie sesión.
+4. **Espera activa y sincronización de hardware:**
+   - Implementa un bucle dinámico que espera activamente la inicialización del adaptador Realtek en el sistema antes de intentar aplicar cambios, evitando fallos por carreras de arranque.
+5. **Desbloqueo de frecuencias en el Registro:**
+   - Localiza dinámicamente la clave exacta de la controladora en:
+     `HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}`
+   - Habilita el soporte de dominio regulatorio internacional: `bSupport80211d = "1"`.
+   - Configura la región de radiofrecuencia para desbloquear todos los canales altos: `CountryRegion5G = "7"`.
+6. **Reinicio limpio de la interfaz de red:**
+   - Ejecuta un reinicio forzado del adaptador (`Restart-NetAdapter`) para recargar los parámetros en caliente, permitiendo la conexión inmediata a la red Wi-Fi de 5 GHz sin perder contraseñas ni perfiles guardados.
 
 ---
 
 ## 📋 Requisitos
 
 - **Sistema Operativo:** Windows 10 / Windows 11.
-- **Hardware:** Tarjeta de red Realtek RTL8822CE 802.11ac PCIe.
-- **Python:** Python 3 instalado en Windows (utiliza únicamente librerías estándar nativas: `winreg`, `subprocess`, `ctypes`, `os`, `sys`, `time`).
+- **Hardware:** Adaptador de red Realtek RTL8822CE 802.11ac PCIe.
+- **Entorno:** Python 3 instalado en Windows (emplea únicamente módulos nativos estándar: `ctypes`, `os`, `subprocess`, `sys`).
+- **PowerShell:** PowerShell 5.1 o superior (incluido por defecto en Windows).
 
 ---
 
 ## 🚀 Uso rápido
 
-1. Descarga el archivo `wifi-reparar.py`.
-2. Haz clic derecho y selecciona **Ejecutar con Python** (o doble clic).
-3. Acepta la ventana de permisos de Administrador (UAC).
-4. El script configurará los parámetros en el Registro, registrará la tarea de inicio automático en Windows y reiniciará el adaptador de red.
-5. La red de 5 GHz conectará de inmediato y la solución quedará fija para todos los arranques futuros.
+1. Guarda el código en un archivo llamado `wifi-reparar.py`.
+2. Haz clic derecho sobre el archivo y selecciona **Ejecutar con Python** (o ábrelo con doble clic).
+3. Acepta el aviso de permisos de Administrador (UAC).
+4. El script desactivará el inicio rápido, creará la tarea de arranque, aplicará los valores de registro y reiniciará la interfaz de red.
+5. La red Wi-Fi se reconectará de inmediato y la persistencia quedará blindada contra reinicios y apagados.
