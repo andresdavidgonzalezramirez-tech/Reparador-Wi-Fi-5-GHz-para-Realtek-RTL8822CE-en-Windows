@@ -13,17 +13,16 @@ def is_admin():
 
 
 def run_as_admin():
-    # Solicita permisos de Administrador automáticamente si se ejecuta con doble clic
     ctypes.windll.shell32.ShellExecuteW(
         None, "runas", sys.executable, f'"{__file__}"', None, 1
     )
 
 
 def block_driver_updates():
-    # Crea la directiva para que Windows Update no sobreescriba ni degrade el controlador
-    policy_path = r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"
+    # 1. Bloqueo general de drivers en actualizaciones de calidad de Windows Update
+    wu_policy_path = r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"
     try:
-        with winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, policy_path) as key:
+        with winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, wu_policy_path) as key:
             winreg.SetValueEx(
                 key,
                 "ExcludeWUDriversInQualityUpdate",
@@ -31,11 +30,34 @@ def block_driver_updates():
                 winreg.REG_DWORD,
                 1,
             )
-        print("[+] Directiva aplicada: Actualizaciones de controladores desactivadas en Windows Update.")
-        return True
+        print("[+] Directiva aplicada: Excluir drivers de Windows Update.")
     except Exception as e:
-        print(f"[-] Error bloqueando actualizaciones de controladores: {e}")
-        return False
+        print(f"[-] Error bloqueando actualizaciones generales de drivers: {e}")
+
+    # 2. Bloqueo estricto por Hardware ID (PCI\VEN_10EC&DEV_C822) para la RTL8822CE
+    dev_policy_path = (
+        r"SOFTWARE\Policies\Microsoft\Windows\DeviceInstall\Restrictions"
+    )
+    deny_list_path = rf"{dev_policy_path}\DenyDeviceIDs"
+    try:
+        with winreg.CreateKey(
+            winreg.HKEY_LOCAL_MACHINE, dev_policy_path
+        ) as key:
+            winreg.SetValueEx(key, "DenyDeviceIDs", 0, winreg.REG_DWORD, 1)
+            winreg.SetValueEx(
+                key, "DenyDeviceIDsRetroactive", 0, winreg.REG_DWORD, 0
+            )
+
+        with winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, deny_list_path) as key:
+            winreg.SetValueEx(
+                key, "1", 0, winreg.REG_SZ, r"PCI\VEN_10EC&DEV_C822"
+            )
+
+        print(
+            "[+] Blindaje aplicado: Bloqueo de instalación por Hardware ID (RTL8822CE)."
+        )
+    except Exception as e:
+        print(f"[-] Error aplicando restricción de DeviceInstall: {e}")
 
 
 def configure_realtek_5ghz():
@@ -60,26 +82,40 @@ def configure_realtek_5ghz():
                         if "8822CE" in driver_desc.upper():
                             print(f"[+] Tarjeta detectada: {driver_desc}")
 
-                            # Limpiar valores manuales que limitan la velocidad
+                            # Limpiar valores manuales que limitan velocidad
                             for param in ["WirelessMode", "BW_20_40_80M"]:
                                 try:
                                     winreg.DeleteValue(key, param)
                                 except FileNotFoundError:
                                     pass
 
-                            # Activar canales extendidos de 5 GHz (canal 149), 802.11d y apagar ahorro de energía
-                            winreg.SetValueEx(key, "bSupport80211d", 0, winreg.REG_SZ, "1")
-                            winreg.SetValueEx(key, "CountryRegion5G", 0, winreg.REG_SZ, "7")
-                            winreg.SetValueEx(key, "RoamingSensitivityType", 0, winreg.REG_SZ, "0")
-                            winreg.SetValueEx(key, "PnPCapabilities", 0, winreg.REG_DWORD, 24)
+                            # Desbloquear canales altos (canal 149), 802.11d y apagar ahorro de energía
+                            winreg.SetValueEx(
+                                key, "bSupport80211d", 0, winreg.REG_SZ, "1"
+                            )
+                            winreg.SetValueEx(
+                                key, "CountryRegion5G", 0, winreg.REG_SZ, "7"
+                            )
+                            winreg.SetValueEx(
+                                key,
+                                "RoamingSensitivityType",
+                                0,
+                                winreg.REG_SZ,
+                                "0",
+                            )
+                            winreg.SetValueEx(
+                                key, "PnPCapabilities", 0, winreg.REG_DWORD, 24
+                            )
 
                             found = True
-                            print("[+] Parámetros de 5 GHz configurados correctamente en el Registro.")
+                            print(
+                                "[+] Parámetros de 5 GHz configurados en el Registro."
+                            )
                             break
                 except (FileNotFoundError, OSError):
                     continue
     except Exception as e:
-        print(f"[-] Error accediendo al Registro de Windows: {e}")
+        print(f"[-] Error accediendo al Registro: {e}")
 
     return found
 
@@ -95,11 +131,10 @@ def restart_adapter_hardware():
         capture_output=True,
     )
     time.sleep(2)
-    print("[+] Interfaz recargada.")
+    print("[+] Controlador recargado.")
 
 
 def clear_wifi_profile(profile_name="Remi 5G"):
-    # Elimina el perfil antiguo con handshake roto para evitar bucle de 'Conectando'
     subprocess.run(
         ["netsh", "wlan", "delete", "profile", f"name={profile_name}"],
         capture_output=True,
@@ -111,17 +146,19 @@ def main():
         run_as_admin()
         sys.exit(0)
 
-    print("=" * 55)
-    print(" Optimizador y Protector Realtek RTL8822CE - 5 GHz ")
-    print("=" * 55)
+    print("=" * 60)
+    print(" Optimizador y Blindaje Realtek RTL8822CE - 5 GHz ")
+    print("=" * 60)
 
     block_driver_updates()
 
     if configure_realtek_5ghz():
         restart_adapter_hardware()
         clear_wifi_profile("Remi 5G")
-        print("\n[✓] Proceso completado exitosamente.")
-        print("[*] Haz clic en 'Remi 5G' en la barra de tareas e ingresa la contraseña.")
+        print("\n[✓] Configuración y blindaje completados exitosamente.")
+        print(
+            "[*] Puedes instalar las actualizaciones de Windows sin riesgo a sobreescritura."
+        )
     else:
         print("\n[X] No se encontró el adaptador Realtek RTL8822CE.")
 
